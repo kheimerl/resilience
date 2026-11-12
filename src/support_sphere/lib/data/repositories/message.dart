@@ -20,7 +20,7 @@ class MessagesRepository {
   }
 
   /// How many recent messages per group are saved for offline use.
-  static const savedMessagesPerGroup = 200;
+  static const savedMessagesPerGroup = 50;
 
   /// Messages in [groupId], oldest first. Starts with the messages saved last
   /// time, if any, then follows the live stream; while the server can't be
@@ -54,8 +54,10 @@ class MessagesRepository {
           controller.add(toMessages(maps));
         },
         onError: (Object error, StackTrace stackTrace) {
-          if (saved != null && OfflineCache.isNetworkError(error)) {
-            if (!hasLive) OfflineCache.markShowingSaved(saved.savedAt);
+          // Keep whatever is on screen through a dropped connection.
+          if (OfflineCache.isNetworkError(error) &&
+              (hasLive || saved != null)) {
+            if (!hasLive) OfflineCache.markShowingSaved(saved!.savedAt);
           } else {
             controller.addError(error, stackTrace);
           }
