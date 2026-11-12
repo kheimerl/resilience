@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
 import 'package:support_sphere/data/models/generated_classes.dart';
 import 'package:support_sphere/data/models/message_urgency_extension.dart';
+import 'package:support_sphere/constants/string_catalog.dart';
 import 'package:support_sphere/data/repositories/message.dart';
+import 'package:support_sphere/data/services/offline_cache.dart';
+import 'package:support_sphere/presentation/components/snackbars.dart';
 import 'package:support_sphere/presentation/components/confirm_button.dart';
 import 'package:support_sphere/utils/supabase.dart';
 
@@ -123,7 +126,13 @@ class _MessageBarState extends State<MessageBar> {
       log.fine('Message sent: $text');
     } on Exception catch (error) {
       log.warning("ERROR: $error");
-      //context.showErrorSnackBar(message: error.message); // FIXME - snackbar
+      if (OfflineCache.isNetworkError(error)) {
+        // Put the text back so it isn't lost.
+        if (_textController.text.isEmpty) _textController.text = text;
+        if (context.mounted) {
+          showErrorSnackBar(context, OfflineStrings.messageNotSent);
+        }
+      }
     }
     setState(() {});
   }

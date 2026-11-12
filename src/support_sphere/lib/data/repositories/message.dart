@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:logging/logging.dart' show Logger;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:support_sphere/data/models/generated_classes.dart';
 import 'package:support_sphere/data/models/messages.dart';
+import 'package:support_sphere/data/services/offline_cache.dart';
 import 'package:support_sphere/utils/supabase.dart';
 import 'package:uuid/v4.dart' show UuidV4;
 
@@ -16,13 +19,54 @@ class MessagesRepository {
         .map((maps) => maps.map((map) => Message.fromJson(json: map)).toList());
   }
 
+  /// How many recent messages per group are saved for offline use.
+  static const savedMessagesPerGroup = 200;
+
+  /// Messages in [groupId], oldest first. Starts with the messages saved last
+  /// time, if any, then follows the live stream; while the server can't be
+  /// reached, the saved messages stay on screen.
   Stream<List<Message>> messagesFor(User user, String groupId) {
-    return supabase
-        .from('messages')
-        .stream(primaryKey: [user.id])
-        .eq('to_id', groupId)
-        .order('sent_on')
-        .map((maps) => maps.map((map) => Message.fromJson(json: map)).toList());
+    final key = 'messages:$groupId';
+    final controller = StreamController<List<Message>>();
+    StreamSubscription<List<Map<String, dynamic>>>? live;
+    var hasLive = false;
+
+    List<Message> toMessages(List maps) =>
+        [for (final map in maps) Message.fromJson(json: map)];
+
+    controller.onListen = () async {
+      final saved = await OfflineCache.load(key);
+      if (controller.isClosed) return;
+      if (saved != null) controller.add(toMessages(saved.data as List));
+      live = supabase
+          .from('messages')
+          .stream(primaryKey: [user.id])
+          .eq('to_id', groupId)
+          .order('sent_on')
+          .listen(
+        (maps) {
+          hasLive = true;
+          OfflineCache.markOnline();
+          final recent = maps.length > savedMessagesPerGroup
+              ? maps.sublist(maps.length - savedMessagesPerGroup)
+              : maps;
+          unawaited(OfflineCache.save(key, recent));
+          controller.add(toMessages(maps));
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          if (saved != null && OfflineCache.isNetworkError(error)) {
+            if (!hasLive) OfflineCache.markShowingSaved(saved.savedAt);
+          } else {
+            controller.addError(error, stackTrace);
+          }
+        },
+      );
+    };
+    controller.onCancel = () async {
+      await live?.cancel();
+      await controller.close();
+    };
+    return controller.stream;
   }
 
   Future<int> unreadCount(String groupId, String userId) {

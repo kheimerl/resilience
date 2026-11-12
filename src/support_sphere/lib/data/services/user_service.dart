@@ -5,14 +5,19 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:support_sphere/data/models/generated_classes.dart';
 import 'package:support_sphere/data/models/person.dart';
 import 'package:support_sphere/utils/supabase.dart';
+import 'package:support_sphere/data/services/offline_cache.dart';
 import 'package:uuid/v4.dart';
 
 final log = Logger('UserService');
 
 class UserService {
   /// Retrieves every person in the system
-  Future<PostgrestList?> getAllPeople() async {
-    return await supabase.from('people').select('*');
+  Future<PostgrestList?> getAllPeople() {
+    return OfflineCache.fetch(
+      'people',
+      () => supabase.from('people').select('*'),
+      decode: decodeRows,
+    );
   }
 
   /// Retrieves the person household by person id.
@@ -67,7 +72,9 @@ class UserService {
     log.finer("getting profile for user id=$userId");
 
     /// This query will perform a join on the user_profiles and people tables
-    return await supabase.from('user_profiles').select('''
+    return OfflineCache.fetch(
+      'profile:$userId',
+      () => supabase.from('user_profiles').select('''
       id,
       people(
         id,
@@ -78,7 +85,9 @@ class UserService {
         is_safe,
         needs_help
       )
-    ''').eq('id', userId).maybeSingle();
+    ''').eq('id', userId).maybeSingle(),
+      decode: decodeRow,
+    );
   }
 
   /// Creates a user profile with the given user id and username.

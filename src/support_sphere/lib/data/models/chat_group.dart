@@ -48,6 +48,35 @@ class ChatGroup extends Equatable {
     );
   }
 
+  /// For saving the inbox on the device (see OfflineCache).
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'last_message': lastMessage,
+        'description': description,
+        'members': members,
+        'type': type.name,
+        'unread_count': unreadCount,
+        'reservation_status': reservationStatus?.name,
+        'is_requester': isRequester,
+      };
+
+  factory ChatGroup.fromJson(Map<String, dynamic> json) {
+    final status = json['reservation_status'] as String?;
+    return ChatGroup(
+      id: json['id'],
+      name: json['name'],
+      lastMessage: json['last_message'],
+      description: json['description'],
+      members: (json['members'] as List).cast<String>(),
+      type: GROUP_CHAT_TYPE.values.byName(json['type']),
+      unreadCount: json['unread_count'],
+      reservationStatus:
+          status == null ? null : RESERVATION_STATUS.values.byName(status),
+      isRequester: json['is_requester'],
+    );
+  }
+
   ChatGroup copyWith({
     RESERVATION_STATUS? reservationStatus,
     bool? isRequester,

@@ -9,6 +9,7 @@ import 'package:support_sphere/data/models/messages.dart';
 import 'package:support_sphere/data/models/person.dart';
 import 'package:support_sphere/data/repositories/cluster.dart';
 import 'package:support_sphere/data/repositories/message.dart';
+import 'package:support_sphere/data/services/offline_cache.dart';
 import 'package:support_sphere/data/repositories/user.dart';
 import 'package:support_sphere/data/services/auth_service.dart';
 import 'package:support_sphere/constants/constants.dart';
@@ -70,11 +71,21 @@ class MessagesState extends State<MessagesPage> {
       RegExp(r' \((Pending|Accepted|Tentative|Rejected|Released|Expired)\)$'),
       '',
     );
-    messagesStream = messageRepo.messagesTo(supabase.auth.currentUser!);
+    // Created once: rebuilding must not reopen the live stream.
+    messagesStream =
+        messageRepo.messagesFor(supabase.auth.currentUser!, group.id);
     profileStream = userRepo.personForId(userId: myUserId);
-    _loadBlockState();
-    _loadPendingReservation();
-    _loadInitialData();
+    // These need the server; offline the page works without them.
+    _whenReachable(_loadBlockState(), 'block state');
+    _whenReachable(_loadPendingReservation(), 'pending reservation');
+    _whenReachable(_loadInitialData(), 'initial data');
+  }
+
+  void _whenReachable(Future<void> load, String what) {
+    load.catchError((Object error) {
+      if (!OfflineCache.isNetworkError(error)) throw error;
+      log.info('Could not load $what: server unreachable', error);
+    });
   }
 
   Future<void> _loadBlockState() async {
@@ -401,8 +412,18 @@ class MessagesState extends State<MessagesPage> {
         ],
       ),
       body: StreamBuilder<List<Message>>(
-        stream: messageRepo.messagesFor(supabase.auth.currentUser!, group.id),
+        stream: messagesStream,
         builder: (context, snapshot) {
+          if (!snapshot.hasData && snapshot.hasError) {
+            return Center(
+              child: Text(
+                OfflineCache.isNetworkError(snapshot.error!)
+                    ? OfflineStrings.messagesUnavailable
+                    : 'Error: ${snapshot.error}',
+                textAlign: TextAlign.center,
+              ),
+            );
+          }
           if (snapshot.hasData) {
             final messages = snapshot.data!;
             return Column(

@@ -5,9 +5,23 @@ import 'package:support_sphere/data/models/person.dart';
 import 'package:support_sphere/utils/supabase.dart';
 import 'package:support_sphere/data/repositories/message.dart';
 import 'package:support_sphere/data/services/resource_service.dart';
+import 'package:support_sphere/data/services/offline_cache.dart';
 
 class ChatRepository {
+  /// The user's chat groups, newest activity first. Saved as a whole for
+  /// offline use, since building it takes several queries per group.
   Future<List<ChatGroup>> getUserChatGroups(String userId) async {
+    final rows = await OfflineCache.fetch(
+      'inbox:$userId',
+      () async => [
+        for (final group in await _fetchUserChatGroups(userId)) group.toJson()
+      ],
+      decode: decodeRows,
+    );
+    return rows.map(ChatGroup.fromJson).toList();
+  }
+
+  Future<List<ChatGroup>> _fetchUserChatGroups(String userId) async {
     developer.log(
       'getUserChatGroups() called for userId=$userId',
       name: 'ChatRepository',

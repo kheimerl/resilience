@@ -3,13 +3,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:support_sphere/data/models/generated_classes.dart';
 import 'package:support_sphere/utils/supabase.dart';
 import 'package:support_sphere/data/models/supplier_candidate.dart';
+import 'package:support_sphere/data/services/offline_cache.dart';
 
 class ResourceService {
   final SupabaseClient _supabaseClient = supabase;
   final log = Logger('ResourceService');
 
-  Future<PostgrestList?> getUserResourcesByUserId(String userId) async {
-    return await _supabaseClient
+  Future<PostgrestList?> getUserResourcesByUserId(String userId) {
+    return OfflineCache.fetch(
+      'user_resources:$userId',
+      () => _supabaseClient
         .from('user_resources')
         .select('''
       id,
@@ -33,7 +36,9 @@ class ResourceService {
       created_at,
       updated_at
     ''')
-        .eq('user_id', userId);
+        .eq('user_id', userId),
+      decode: decodeRows,
+    );
   }
 
   Future<PostgrestList?> getResourceCVByText(String text) async {
@@ -47,11 +52,15 @@ class ResourceService {
         .ilike('name', '%$text%');
   }
 
-  Future<PostgrestList?> getResourceTypes() async {
-    return await _supabaseClient.from('resource_types').select('''
+  Future<PostgrestList?> getResourceTypes() {
+    return OfflineCache.fetch(
+      'resource_types',
+      () => _supabaseClient.from('resource_types').select('''
       id,
       name
-    ''');
+    '''),
+      decode: decodeRows,
+    );
   }
 
   Future<PostgrestList?> getResources() async {
@@ -72,8 +81,10 @@ class ResourceService {
     ''');
   }
 
-  Future<PostgrestList?> getAllResources() async {
-    return await _supabaseClient.from('resources').select('''
+  Future<PostgrestList?> getAllResources() {
+    return OfflineCache.fetch(
+      'all_resources',
+      () => _supabaseClient.from('resources').select('''
       notes,
       qty_needed,
       qty_available,
@@ -91,7 +102,9 @@ class ResourceService {
       user_resources (
         quantity
       )
-    ''');
+    '''),
+      decode: decodeRows,
+    );
   }
 
   Future<void> addUserResource({

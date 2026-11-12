@@ -19,6 +19,12 @@ class OfflineStrings {
       "Couldn't save: you're offline. Try again when you're connected.";
   static const String inboxUnavailable =
       "Messages need a connection. Try again when you're connected.";
+  static const String messagesUnavailable =
+      "These messages haven't been saved on this device yet. "
+      "They'll load when you're connected.";
+  static const String messageNotSent =
+      "Message not sent: you're offline. It's still in the box; "
+      "send it again when you're connected.";
 }
 
 class EmergencyAlertDialogStrings {
